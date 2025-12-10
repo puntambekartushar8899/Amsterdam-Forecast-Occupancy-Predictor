@@ -3,11 +3,30 @@ import pandas as pd
 import pickle
 import os
 import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
 
 # -------------------------------------------
 # 1. SETUP & CONFIGURATION
 # -------------------------------------------
 st.set_page_config(page_title="Amsterdam Host Advisor", page_icon="🌷", layout="wide")
+
+# PROFESSIONAL STYLING SETUP
+sns.set_theme(style="whitegrid")
+plt.rcParams.update({
+    'font.family': 'sans-serif',
+    'font.size': 9,              # Smaller font
+    'axes.titlesize': 12,        # Smaller titles
+    'axes.labelsize': 10,
+    'xtick.labelsize': 9,
+    'ytick.labelsize': 9,
+    'figure.titlesize': 14
+})
+
+COLOR_FIXED = "#94A3B8"  # Slate Grey
+COLOR_AI = "#4F46E5"     # Royal Blue
+COLOR_ACCENT = "#10B981" # Emerald
 
 # -------------------------------------------
 # 2. LOAD THE TRAINED MODEL
@@ -28,34 +47,20 @@ if model is None:
     st.stop()
 
 # -------------------------------------------
-# 3. HEADER
-# -------------------------------------------
-st.title("Amsterdam Host Strategy Tool")
-st.markdown("""
-**Will you get a booking?** This tool compares your **New Price** against your **Reference Price** to predict if a discount or hike will win the guest.
-""")
-st.divider()
-
-# -------------------------------------------
-# 4. SIDEBAR INPUTS
+# 3. SIDEBAR INPUTS
 # -------------------------------------------
 st.sidebar.header("1. Pricing Strategy")
 
-# INPUT 1: The Anchor
 ref_price = st.sidebar.number_input(
     "Reference Price (Standard) €", 
-    min_value=10, max_value=2000, value=200, step=10,
-    help="Your standard price or last week's price."
+    min_value=10, max_value=2000, value=200, step=10
 )
 
-# INPUT 2: The Test Price
 target_price = st.sidebar.number_input(
     "Target Price (Test) €", 
-    min_value=10, max_value=2000, value=180, step=10,
-    help="The price you want to test for this date."
+    min_value=10, max_value=2000, value=180, step=10
 )
 
-# Visual Cue
 if target_price < ref_price:
     st.sidebar.caption(f"📉 **Discount:** Testing a €{ref_price - target_price} drop.")
 elif target_price > ref_price:
@@ -68,7 +73,6 @@ st.sidebar.header("2. Your Listing")
 
 reviews = st.sidebar.slider("Total Reviews", 0, 500, 50)
 
-# --- UPDATED: STAR RATING DROPDOWN ---
 star_options = {
     "⭐⭐⭐⭐⭐ (Excellent)": 0.95,
     "⭐⭐⭐⭐ (Good)": 0.6,
@@ -76,40 +80,21 @@ star_options = {
     "⭐⭐ (Poor)": -0.5,
     "⭐ (Terrible)": -0.9
 }
-
-star_selection = st.sidebar.selectbox(
-    "Guest Rating",
-    options=list(star_options.keys()),
-    index=1 # Default to 4 stars
-)
+star_selection = st.sidebar.selectbox("Guest Rating", options=list(star_options.keys()), index=1)
 sentiment_score = star_options[star_selection]
 
-# Topic Selection
 topic_display = {0: "Standard / General", 1: "Great Location", 2: "Great Hospitality"}
 topic = st.sidebar.selectbox("Main Selling Point", options=[0, 1, 2], format_func=lambda x: topic_display[x])
 
 st.sidebar.markdown("---")
 st.sidebar.header("3. Select Date")
 
-# Date Picker
 today = datetime.date.today()
-selected_date = st.sidebar.date_input(
-    "Check-in Date", 
-    value=today + datetime.timedelta(days=7),
-    min_value=today
-)
+selected_date = st.sidebar.date_input("Check-in Date", value=today + datetime.timedelta(days=7), min_value=today)
 
-# Auto-Extract Month/Day
 input_month = selected_date.month
 input_day_of_week = selected_date.weekday()
 
-# Holiday Visuals
-if input_month == 12:
-    st.sidebar.success("🎄 Holiday Season!")
-elif input_month in [7, 8]:
-    st.sidebar.success("☀️ Peak Summer!")
-
-# Weather Defaults
 weather_defaults = {
     1: (3, 20, False), 2: (3, 20, False), 3: (6, 18, True),
     4: (9, 15, False), 5: (13, 13, False), 6: (15, 12, False),
@@ -124,110 +109,162 @@ with st.sidebar.expander(f"Weather Settings ({selected_date.strftime('%B')})"):
     rain = st.checkbox("Rain Forecasted?", value=d_rain)
 
 # -------------------------------------------
-# 5. ANALYSIS ENGINE
+# 4. MAIN PAGE: LIVE ANALYSIS (No Buttons)
 # -------------------------------------------
+st.title("🌷 Amsterdam Host Strategy Tool")
+st.markdown(f"### 📅 Forecast for {selected_date.strftime('%A, %d %B %Y')}")
 
-if st.button("🚀 Analyze Strategy", type="primary"):
-    
-    # --- A. PRICE SIMULATION ---
-    # Compare against REFERENCE Price
-    scenarios = {
-        "Target": target_price,
-        "Discount": int(target_price * 0.8), # 20% Cheaper
-        "Premium": int(target_price * 1.2)   # 20% More Expensive
+# --- 1. RUN PREDICTION INSTANTLY ---
+scenarios = {
+    "Target": target_price,
+    "Discount": int(target_price * 0.8), 
+    "Premium": int(target_price * 1.2)   
+}
+
+results = {}
+
+for name, price_sim in scenarios.items():
+    input_data = pd.DataFrame({
+        'price': [price_sim],
+        'price_7d_lag': [ref_price], 
+        'Temp': [temp], 'Rain': [1.0 if rain else 0.0], 'Wind': [wind],
+        'month': [input_month], 'day_of_week': [input_day_of_week],
+        'avg_sentiment': [sentiment_score], 'total_reviews': [reviews], 'dominant_topic': [topic]
+    })
+    prob = model.predict_proba(input_data)[0][1]
+    results[name] = prob
+
+p_target = results["Target"]
+p_prem = results["Premium"]
+p_disc = results["Discount"]
+
+# DISPLAY SCORECARD
+col1, col2, col3 = st.columns([1, 1.3, 1])
+
+with col1:
+    color = "green" if p_target >= 0.7 else "orange" if p_target >= 0.4 else "red"
+    st.markdown(f"""
+    <div style="text-align: center; border: 2px solid #f0f2f6; padding: 15px; border-radius: 10px;">
+        <h4 style="margin:0; color:gray;">Booking Chance</h4>
+        <h1 style="color: {color}; font-size: 36px; margin:0;">{p_target:.0%}</h1>
+        <p style="color: gray; margin:0; font-size: 12px;">at €{target_price}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    # FIX: Cast to float to prevent StreamlitAPIException
+    st.progress(float(p_target))
+
+with col2:
+    st.write("#### 💡 AI Strategy")
+    if p_prem >= 0.65:
+        st.success(f"🚀 **Raise Price.** Demand is strong! You retain a **{p_prem:.0%}** chance even at €{scenarios['Premium']}.")
+    elif p_target < 0.50 and p_disc >= 0.60:
+        st.warning(f"🏷️ **Discount Needed.** Demand is soft. Dropping to €{scenarios['Discount']} boosts chance by **+{(p_disc - p_target):.0%}**.")
+    elif p_target >= 0.50:
+            st.success(f"✅ **Hold Steady.** Price is competitive. Changing it adds risk.")
+    else:
+        st.error("📉 **Low Demand.** Even with a discount, chance is low. Focus on photos/reviews.")
+
+with col3:
+    st.write("#### 📊 Sensitivity")
+    data = {
+        "Price": [f"€{scenarios['Premium']}", f"€{target_price}", f"€{scenarios['Discount']}"],
+        "Chance": [f"{p_prem:.0%}", f"{p_target:.0%}", f"{p_disc:.0%}"],
     }
+    st.dataframe(pd.DataFrame(data, index=["Premium", "Target", "Discount"]), use_container_width=True)
+
+# -------------------------------------------
+# 5. ANNUAL SIMULATION (AUTO-RUN)
+# -------------------------------------------
+st.divider()
+st.subheader("💰 Annual Revenue Simulator")
+
+# Run simulation automatically (It's fast enough)
+monthly_data = []
+months = range(1, 13)
+month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+test_prices = [int(ref_price * 0.7), int(ref_price * 0.85), ref_price, int(ref_price * 1.15), int(ref_price * 1.3)]
+total_fixed_revenue = 0
+total_opt_revenue = 0
+
+for m in months:
+    m_temp, m_wind, m_rain = weather_defaults[m]
     
-    results = {}
+    # FIXED Strategy
+    fixed_input = pd.DataFrame({
+        'price': [ref_price], 'price_7d_lag': [ref_price],
+        'Temp': [m_temp], 'Rain': [1.0 if m_rain else 0.0], 'Wind': [m_wind],
+        'month': [m], 'day_of_week': [5],
+        'avg_sentiment': [sentiment_score], 'total_reviews': [reviews], 'dominant_topic': [topic]
+    })
+    prob_fixed = model.predict_proba(fixed_input)[0][1]
+    exp_rev_fixed = ref_price * prob_fixed
     
-    for name, price_sim in scenarios.items():
-        input_data = pd.DataFrame({
-            'price': [price_sim],
-            'price_7d_lag': [ref_price], # Always anchor to Reference
-            'Temp': [temp], 'Rain': [1.0 if rain else 0.0], 'Wind': [wind],
-            'month': [input_month], 'day_of_week': [input_day_of_week],
-            'avg_sentiment': [sentiment_score], 'total_reviews': [reviews], 'dominant_topic': [topic]
-        })
-        
-        prob = model.predict_proba(input_data)[0][1]
-        results[name] = prob
-
-    # --- B. TOPIC SIMULATION ---
-    topic_results = {}
-    for t_code in [0, 1, 2]:
-        if t_code == topic: continue 
-        input_data_topic = pd.DataFrame({
-            'price': [target_price],
-            'price_7d_lag': [ref_price],
-            'Temp': [temp], 'Rain': [1.0 if rain else 0.0], 'Wind': [wind],
-            'month': [input_month], 'day_of_week': [input_day_of_week],
-            'avg_sentiment': [sentiment_score], 'total_reviews': [reviews], 
-            'dominant_topic': [t_code]
-        })
-        topic_results[t_code] = model.predict_proba(input_data_topic)[0][1]
-
-    # -------------------------------------------
-    # 6. RESULTS DASHBOARD
-    # -------------------------------------------
+    # OPTIMAL Strategy
+    best_price = ref_price
+    best_rev = 0
     
-    st.markdown(f"### 📅 Forecast for {selected_date.strftime('%A, %d %B %Y')}")
+    batch_input = pd.DataFrame({
+        'price': test_prices,
+        'price_7d_lag': [ref_price]*5,
+        'Temp': [m_temp]*5, 'Rain': [1.0 if m_rain else 0.0]*5, 'Wind': [m_wind]*5,
+        'month': [m]*5, 'day_of_week': [5]*5,
+        'avg_sentiment': [sentiment_score]*5, 'total_reviews': [reviews]*5, 'dominant_topic': [topic]*5
+    })
+    probs = model.predict_proba(batch_input)[:, 1]
     
-    # Extract Probabilities
-    p_target = results["Target"]
-    p_prem = results["Premium"]
-    p_disc = results["Discount"]
-
-    col1, col2, col3 = st.columns([1, 1.3, 1])
+    for i, p_val in enumerate(test_prices):
+        rev = p_val * probs[i]
+        if rev > best_rev:
+            best_rev = rev
+            best_price = p_val
     
-    # --- COLUMN 1: SCORECARD ---
-    with col1:
-        color = "green" if p_target >= 0.7 else "orange" if p_target >= 0.4 else "red"
-        st.markdown(f"""
-        <div style="text-align: center; border: 2px solid #f0f2f6; padding: 20px; border-radius: 10px;">
-            <h2 style="margin:0; font-size:16px;">Booking Chance</h2>
-            <h1 style="color: {color}; font-size: 45px; margin:0;">{p_target:.0%}</h1>
-            <p style="color: gray; margin:0;">at €{target_price}</p>
-        </div>
-        """, unsafe_allow_html=True)
+    monthly_data.append({
+        "Month": month_names[m-1],
+        "Fixed Price": ref_price,
+        "Optimal Price": best_price,
+        "Revenue (Fixed)": exp_rev_fixed * 30, 
+        "Revenue (Smart)": best_rev * 30       
+    })
+    
+    total_fixed_revenue += (exp_rev_fixed * 30)
+    total_opt_revenue += (best_rev * 30)
 
-    # --- COLUMN 2: STRATEGY ADVICE (No Revenue, Just Probability) ---
-    with col2:
-        st.write("#### 💡 AI Strategy")
-        
-        # 1. CONTENT CHECK (Topic)
-        best_alt_topic = max(topic_results, key=topic_results.get) if topic_results else None
-        if best_alt_topic is not None and topic_results[best_alt_topic] > p_target + 0.05:
-            t_name = {0: "Standard", 1: "Location", 2: "Hospitality"}[best_alt_topic]
-            diff = topic_results[best_alt_topic] - p_target
-            st.info(f"✨ **Edit Description:** Switch focus to **'{t_name}'** to boost chance by **+{diff:.0%}**.")
+df_sim = pd.DataFrame(monthly_data)
 
-        # 2. PRICE CHECK (Probability Based)
-        
-        # Case A: HIGH DEMAND (Safe to Raise?)
-        if p_prem >= 0.65:
-            st.success(f"🚀 **Raise Price to €{scenarios['Premium']}.**\n\nDemand is very strong! You still have a high **{p_prem:.0%}** chance of booking even at the higher price.")
-            
-        # Case B: PRICE SENSITIVE (Discount helps?)
-        # Current is 'meh' (<50%), but discount makes it 'good' (>60%)
-        elif p_target < 0.50 and p_disc >= 0.60:
-            diff = p_disc - p_target
-            st.warning(f"🏷️ **Drop Price to €{scenarios['Discount']}.**\n\nDemand is sensitive here. A discount boosts your booking probability by **+{diff:.0%}**. Secure the booking!")
-            
-        # Case C: HOLD (Discount doesn't help enough, or Target is fine)
-        elif p_target >= 0.50:
-             st.success(f"✅ **Hold Steady.**\n\nYour price is competitive. You have a solid **{p_target:.0%}** chance. Changing price might add unnecessary risk.")
-             
-        # Case D: COLD MARKET (Nothing helps)
-        else:
-            st.error("📉 **Market is Cold.**\n\nEven with a discount, the booking chance is low. Focus on getting better reviews or better photos.")
+# --- VISUALIZATION 1: COMPACT LINE CHART ---
+col_graph1, col_graph2 = st.columns(2)
 
-    # --- COLUMN 3: COMPARISON TABLE ---
-    with col3:
-        st.write("#### 📊 Price vs. Chance")
-        
-        data = {
-            "Strategy": ["Premium (+20%)", "Your Target", "Discount (-20%)"],
-            "Price": [f"€{scenarios['Premium']}", f"€{target_price}", f"€{scenarios['Discount']}"],
-            "Booking Chance": [f"{p_prem:.0%}", f"{p_target:.0%}", f"{p_disc:.0%}"],
-        }
-        df_sens = pd.DataFrame(data)
-        st.dataframe(df_sens, hide_index=True, use_container_width=True)
+with col_graph1:
+    st.write("**Optimal Pricing Curve**")
+    fig, ax = plt.subplots(figsize=(7, 3)) # Compact Size
+    sns.lineplot(data=df_sim, x="Month", y="Fixed Price", label="Fixed", 
+                 linestyle="--", color=COLOR_FIXED, linewidth=2, ax=ax)
+    sns.lineplot(data=df_sim, x="Month", y="Optimal Price", label="Smart", 
+                 marker="o", markersize=6, color=COLOR_AI, linewidth=2.5, ax=ax)
+    ax.fill_between(df_sim["Month"], df_sim["Fixed Price"], df_sim["Optimal Price"], 
+                    where=(df_sim["Optimal Price"] > df_sim["Fixed Price"]),
+                    interpolate=True, color=COLOR_AI, alpha=0.1)
+    ax.set_ylabel("Price (€)")
+    ax.set_xlabel("")
+    sns.despine()
+    st.pyplot(fig)
+
+with col_graph2:
+    st.write("**Annual Revenue Gap**")
+    delta = total_opt_revenue - total_fixed_revenue
+    st.caption(f"Potential Gain: **+€{delta:,.0f}** / year")
+    
+    fig2, ax2 = plt.subplots(figsize=(7, 3)) # Compact Size
+    revenue_data = pd.DataFrame({
+        "Strategy": ["Fixed", "Smart"],
+        "Revenue": [total_fixed_revenue, total_opt_revenue]
+    })
+    sns.barplot(data=revenue_data, y="Strategy", x="Revenue", palette=[COLOR_FIXED, COLOR_ACCENT], ax=ax2)
+    for i, v in enumerate([total_fixed_revenue, total_opt_revenue]):
+        ax2.text(v * 0.95, i, f"€{v:,.0f}", color='white', fontweight='bold', ha='right', va='center')
+    ax2.set_xlabel("Total €")
+    ax2.set_ylabel("")
+    sns.despine(left=True, bottom=True)
+    ax2.set_xticks([])
+    st.pyplot(fig2)
