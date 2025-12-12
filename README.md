@@ -1,13 +1,15 @@
+
+
 # 🏙️ The Amsterdam Forecast: A Multi-Modal Occupancy Predictor
 
-A machine learning framework that helps Airbnb hosts in Amsterdam maximize revenue by predicting booking probability using price, weather, and guest sentiment. [web:7][web:15]
+A machine learning framework that helps Airbnb hosts in Amsterdam maximize revenue by predicting booking probability using price, weather, and guest sentiment. 
 
 ---
 
 ## 📖 About the Project
 
-In the competitive short-term rental market, many hosts set prices by guesswork and overlook signals such as upcoming weather or patterns in guest reviews. [web:7]  
-The Amsterdam Forecast fuses Economics (calendar data), Environment (weather API), and Voice of the Customer (NLP on reviews) into a single predictive engine using an XGBoost classifier and an interactive Streamlit dashboard. [web:12][web:15]
+In the competitive short-term rental market, many hosts set prices by guesswork and overlook signals such as upcoming weather or patterns in guest reviews.     
+The Amsterdam Forecast fuses Economics (calendar data), Environment (weather API), and Voice of the Customer (NLP on reviews) into a single predictive engine using an XGBoost classifier and an interactive Streamlit dashboard.    
 
 ---
 
@@ -36,7 +38,7 @@ To see how the app works, consider **Sarah**, a host with an apartment near the 
    Sarah opens the app and enters:
    - Reference Price: €200 (standard rate).  
    - Target Price: €180 (test rate).  
-   - Weather: Auto-detected “Rainy & 12°C”. [web:15]  
+   - Weather: Auto-detected “Rainy & 12°C”.     
    - Review Score: 4 Stars (good, but not perfect).
 
 2. **The AI Analysis (What the App Displays)**
@@ -87,7 +89,7 @@ Amsterdam_Forecast/
 
 ## ⚙️ Installation & Setup
 
-This project uses a dedicated environment to avoid version conflicts between `xgboost`, `shap`, and `numpy`. [web:15]
+This project uses a dedicated environment to avoid version conflicts between `xgboost`, `shap`, and `numpy`.   
 
 ### Prerequisites
 
@@ -96,7 +98,7 @@ This project uses a dedicated environment to avoid version conflicts between `xg
 
 ### Step 1: Clone the Repository
 
-git clone <your-repo-url>
+git clone https://github.com/Prajwal291002/Amsterdam-Forecast-Occupancy-Predictor.git
 cd Amsterdam_Forecast
 
 
@@ -128,7 +130,7 @@ jupyter notebook
 
 Then run, in order:
 
-1. `01_Structured_Pipeline.ipynb` – Prepares calendar and weather data. [web:12][web:15]  
+1. `01_Structured_Pipeline.ipynb` – Prepares calendar and weather data.      
 2. `02_Text_Pipeline.ipynb` – Extracts sentiment and topics from reviews.  
 3. `03_Integration_and_Modeling.ipynb` – Merges datasets, trains XGBoost, and creates evaluation plots.
 
@@ -143,8 +145,7 @@ This starts a local server, typically available at:
 
 http://localhost:8501
 
-where the interactive dashboard can be accessed. [web:2][web:14]
-
+where the interactive dashboard can be accessed.
 ---
 
 ## 🧠 Methodology
@@ -152,7 +153,7 @@ where the interactive dashboard can be accessed. [web:2][web:14]
 ### Phase 1: Structured Data Pipeline
 
 - **Imputation:** Missing prices in the calendar for booked dates are filled using `base_price` from the listings dataset.  
-- **Enrichment:** Historical weather data (rain, wind, temperature) is joined from a weather API such as Meteostat. [web:12][web:15]  
+- **Enrichment:** Historical weather data (rain, wind, temperature) is joined from a weather API such as Meteostat.      
 - **Feature Engineering:** Features like `price_7d_lag` capture price volatility and discounting behavior over time.
 
 ### Phase 2: Text Pipeline (NLP)
@@ -191,4 +192,4 @@ where the interactive dashboard can be accessed. [web:2][web:14]
 
 ## 📜 License
 
-This project is for academic purposes. Data is provided by the InsideAirbnb initiative. [web:7][web:13][web:19]
+This project is for academic purposes. Data is provided by the InsideAirbnb initiative.  
